@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>DF No Ponto - Veiculos em Tempo Real</title>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+      html, body { height: 100%; margin: 0; }
+      #map { width: 100%; height: 100%; }
+
+      /* Popup ajustado para preencher totalmente a cor da operadora */
+      .popup-content {
+        padding: 8px;
+        border-radius: 8px;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        font-size: 16px;
+        font-weight: bold;
+        line-height: 1.2;
+        box-shadow: none;
+      }
+      .popup-content b { display: inline-block; width: 85px; }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+      const map = L.map('map').setView([-15.7939, -47.8828], 12);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
+
+      const veiculosMarkers = {};
+
+      const empresaCores = {
+        "PIRACICABANA": "ff1e00",
+        "PIONEIRA": "ffe600",
+        "URBI": "0080ff",
+        "MARECHAL": "ff9100",
+        "BSBUS": "4dff00"
+      };
+
+      function criarIconeHex(hexNoHash) {
+        return L.icon({
+          iconUrl: `https://img.icons8.com/?size=100&id=9351&format=png&color=${hexNoHash}`,
+          iconSize: [24, 24],      
+          popupAnchor: [0, -24],
+          className: "bus-icon"
+        });
+      }
+
+      const icons = {};
+      for (const nome in empresaCores) {
+        icons[nome] = criarIconeHex(empresaCores[nome]);
+      }
+      const iconDefault = criarIconeHex('000000');
+
+      function getContrasteTexto(hex) {
+        const r = parseInt(hex.substr(0,2),16);
+        const g = parseInt(hex.substr(2,2),16);
+        const b = parseInt(hex.substr(4,2),16);
+        const lumin = 0.299*r + 0.587*g + 0.114*b;
+        return (lumin > 186) ? '#000000' : '#ffffff';
+      }
+
+      function formatPopupHtml(operadora, numero, linha, timestamp, hexColor) {
+        const data = new Date(timestamp);
+        const agora = new Date();
+
+        const dataStr = data.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+        const horaStr = data.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+
+        const diffMs = Math.max(0, agora - data);
+        const diffM = Math.floor(diffMs / (1000*60));
+        const diffS = Math.floor((diffMs % (1000*60))/1000);
+
+        let ultimoSinal = (diffMs < 60000) ? `${diffS} sec` : `${diffM}min ${diffS}sec`;
+        const textColor = getContrasteTexto(hexColor);
+
+        // Aqui aplicamos a cor diretamente nos elementos do Leaflet
+        return `
+          <div class="popup-content" style="color:${textColor};">
+            <style>
+              .leaflet-popup-content-wrapper {
+                background:#${hexColor} !important;
+                box-shadow:none !important;
+              }
+              .leaflet-popup-tip {
+                background:#${hexColor} !important;
+              }
+            </style>
+            <div><b>Operadora:</b> ${operadora}</div>
+            <div><b>Número:</b> ${numero}</div>
+            <div><b>Linha:</b> ${linha}</div>
+            <div><b>Data:</b> ${dataStr}</div>
+            <div><b>Horário:</b> ${horaStr}</div>
+            <div><b>Último Sinal:</b> ${ultimoSinal}</div>
+          </div>`;
+      }
+
+      function operadoraPorNumero(numero) {
+        const s = String(numero || '');
+        const primeiro = s.charAt(0);
+        switch (primeiro) {
+          case '1': return 'PIRACICABANA';
+          case '2': return 'PIONEIRA';
+          case '3': return 'URBI';
+          case '4': return 'MARECHAL';
+          case '5':
+          case '7': return 'BSBUS';
+          default: return 'DESCONHECIDO';
+        }
+      }
+
+      async function atualizarVeiculos() {
+        try {
+          const res = await fetch('https://www.sistemas.dftrans.df.gov.br/service/gps/operacoes');
+          const dados = await res.json();
+
+          dados.forEach(op => {
+            (op.veiculos || []).forEach(v => {
+              const lat = v.localizacao?.latitude;
+              const lon = v.localizacao?.longitude;
+              const numero = v.numero;
+              const linha = v.linha;
+              const horario = v.horario;
+
+              if (lat == null || lon == null || numero == null) return;
+
+              const operadora = operadoraPorNumero(numero);
+              const hex = empresaCores[operadora] || '000000';
+              const icon = icons[operadora] || iconDefault;
+
+              const popupHtml = formatPopupHtml(operadora, numero, linha, horario, hex);
+
+              if (veiculosMarkers[numero]) {
+                const mk = veiculosMarkers[numero];
+                mk.setLatLng([lat, lon]);
+                mk.setPopupContent(popupHtml);
+                if (mk.options.icon !== icon) mk.setIcon(icon);
+              } else {
+                const mk = L.marker([lat, lon], { icon }).addTo(map);
+                mk.bindPopup(popupHtml);
+                veiculosMarkers[numero] = mk;
+              }
+            });
+          });
+
+        } catch (err) {
+          console.error('Erro ao atualizarVeiculos:', err);
+        }
+      }
+
+      atualizarVeiculos();
+      setInterval(atualizarVeiculos, 1000);
+    </script>
+  </body>
+</html>
