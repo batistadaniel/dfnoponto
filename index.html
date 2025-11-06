@@ -1,158 +1,207 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>DF No Ponto - Veiculos em Tempo Real</title>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mapa Frota SEMOB</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  #map { height: 100vh; width: 100%; }
 
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <style>
-      html, body { height: 100%; margin: 0; box-sizing: border-box; }
-      #map { width: 100%; height: 100%; }
+  .filtro-container {
+    position: absolute;
+    bottom: 30px;
+    right: 30px;
+    background: white;
+    padding: 10px 15px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    font-family: sans-serif;
+    z-index: 99999;
+  }
 
-      /* Popup ajustado para preencher totalmente a cor da operadora */
-      .popup-content {
-        padding: 3px;
-        border-radius: 8px;
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-        font-size: 14px;
-        font-weight: bold;
-        box-shadow: none;
+  .filtro-container label {
+    display:block;
+    font-size:14px;
+    margin:4px 0;
+  }
+
+  .leaflet-popup {
+    pointer-events: none !important;
+  }
+  .leaflet-popup-content-wrapper,
+  .leaflet-popup-tip {
+    pointer-events: none !important;
+  }
+
+  /* Legendas estilo tooltip */
+  .linha-tooltip span {
+    padding: 2px 6px;
+    border: 4px solid white; /* Borda bem grossa */
+    border-radius: 5px;
+    color: black;
+    font-weight: bold;
+    white-space: nowrap;
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div class="filtro-container">
+  <label><input type="checkbox" id="todos" checked> Exibir todos</label>
+  <label><input type="checkbox" class="empresa" value="PIRACICABANA" checked> PIRACICABANA</label>
+  <label><input type="checkbox" class="empresa" value="PIONEIRA" checked> PIONEIRA</label>
+  <label><input type="checkbox" class="empresa" value="URBI" checked> URBI</label>
+  <label><input type="checkbox" class="empresa" value="MARECHAL" checked> MARECHAL</label>
+  <label><input type="checkbox" class="empresa" value="BSBUS" checked> BSBUS</label>
+</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+const url = "https://corsproxy.io/?https%3A%2F%2Fgeoserver.semob.df.gov.br%2Fgeoserver%2Fsemob%2Fows%3Fservice%3DWFS%26version%3D1.0.0%26request%3DGetFeature%26typeName%3Dsemob%253A%25C3%259Altima%2520posi%25C3%25A7%25C3%25A3o%2520da%2520frota%26outputFormat%3Dapplication%252Fjson";
+
+const map = L.map('map').setView([-15.8, -47.9], 11);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap'
+}).addTo(map);
+
+let markers = {};
+let labels = {};
+let popupInfo = {id:null, marker:null};
+let lastUpdateTimes = {};
+
+function empresaPorPrefixo(numero) {
+  const s = String(numero||'');
+  const primeiro = s.charAt(0);
+  switch(primeiro){
+    case '1': return 'PIRACICABANA';
+    case '2': return 'PIONEIRA';
+    case '3': return 'URBI';
+    case '4': return 'MARECHAL';
+    case '5': case '7': return 'BSBUS';
+    default: return 'DESCONHECIDO';
+  }
+}
+
+const coresEmpresas = {
+  "PIRACICABANA": "#ff1e00",
+  "PIONEIRA": "#ffd500",
+  "URBI": "#0080ff",
+  "MARECHAL": "#ff9100",
+  "BSBUS": "#4dff00"
+};
+
+function formatarTempo(segundos){
+  const dias = Math.floor(segundos/86400);
+  const horas = Math.floor((segundos%86400)/3600);
+  const minutos = Math.floor((segundos%3600)/60);
+  const seg = segundos%60;
+  if(dias>0) return `${dias}d ${horas}h ${minutos}m ${seg}s`;
+  if(horas>0) return `${horas}h ${minutos}m ${seg}s`;
+  if(minutos>0) return `${minutos}m ${seg}s`;
+  return `${seg}s`;
+}
+
+async function atualizarMapa(){
+  try{
+    const response = await fetch(url);
+    const data = await response.json();
+
+    data.features.forEach(f=>{
+      const {prefixo, datalocal, velocidade, cd_linha} = f.properties;
+      const lat = parseFloat(f.properties.latitude);
+      const lon = parseFloat(f.properties.longitude);
+      if(!lat||!lon||lat===0||lon===0) return;
+
+      const id = prefixo;
+      const empresa = empresaPorPrefixo(prefixo);
+      lastUpdateTimes[id] = new Date(datalocal);
+
+      const checkbox = document.querySelector(`.empresa[value="${empresa}"]`);
+      if(checkbox && !checkbox.checked){
+        if(markers[id]) { map.removeLayer(markers[id]); delete markers[id]; }
+        if(labels[id]) { map.removeLayer(labels[id]); delete labels[id]; }
+        return;
       }
-      .popup-content b { display: inline-block; width: 85px; }
-    </style>
-  </head>
-  <body>
-    <div id="map"></div>
 
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-    <script>
-      const map = L.map('map').setView([-15.7939, -47.8828], 12);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
-      }).addTo(map);
+      const mostrarLegenda = cd_linha && map.getZoom()>=13;
 
-      const veiculosMarkers = {};
-
-      const empresaCores = {
-        "PIRACICABANA": "505558", //ff1e00    505558
-        "PIONEIRA": "505558",
-        "URBI": "505558",
-        "MARECHAL": "505558",
-        "BSBUS": "505558"
-      };
-
-      // Mapeamento dos ícones locais
-      const icons = {
-        "PIRACICABANA": L.icon({ iconUrl: "img/bus-piracicabana.png", iconSize: [24, 24], popupAnchor: [0, -24] }),
-        "PIONEIRA": L.icon({ iconUrl: "img/bus-pioneira.png", iconSize: [24, 24], popupAnchor: [0, -24] }),
-        "URBI": L.icon({ iconUrl: "img/bus-urbi.png", iconSize: [24, 24], popupAnchor: [0, -24] }),
-        "MARECHAL": L.icon({ iconUrl: "img/bus-marechal.png", iconSize: [24, 24], popupAnchor: [0, -24] }),
-        "BSBUS": L.icon({ iconUrl: "img/bus-bsbus.png", iconSize: [24, 24], popupAnchor: [0, -24] }),
-      };
-
-      const iconDefault = L.icon({ iconUrl: "img/bus-default.png", iconSize: [24, 24], popupAnchor: [0, -24] });
-
-      function getContrasteTexto(hex) {
-        const r = parseInt(hex.substr(0,2),16);
-        const g = parseInt(hex.substr(2,2),16);
-        const b = parseInt(hex.substr(4,2),16);
-        const lumin = 0.299*r + 0.587*g + 0.114*b;
-        return (lumin > 186) ? '#000000' : '#ffffff';
-      }
-
-      function formatPopupHtml(operadora, numero, linha, timestamp, hexColor) {
-        const data = new Date(timestamp);
-        const agora = new Date();
-
-        const dataStr = data.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-        const horaStr = data.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-
-        const diffMs = Math.max(0, agora - data);
-        const diffM = Math.floor(diffMs / (1000*60));
-        const diffS = Math.floor((diffMs % (1000*60))/1000);
-
-        let ultimoSinal = (diffMs < 60000) ? `${diffS} sec` : `${diffM}min ${diffS}sec`;
-        const textColor = getContrasteTexto(hexColor);
-
-        return `
-          <div class="popup-content" style="color:${textColor};">
-            <style>
-              .leaflet-popup-content-wrapper {
-                background:#${hexColor} !important;
-                box-shadow:none !important;
-                //border: 2px solid black;
-
-              }
-              .leaflet-popup-tip {
-                background:#${hexColor} !important;
-                //border: 2px solid black;
-              }
-            </style>
-            <div><b>Operadora:</b> ${operadora}</div>
-            <div><b>Número:</b> ${numero}</div>
-            <div><b>Linha:</b> ${linha}</div>
-            <div><b>Data:</b> ${dataStr}</div>
-            <div><b>Horário:</b> ${horaStr}</div>
-            <div><b>Último Sinal:</b> ${ultimoSinal}</div>
-          </div>`;
-      }
-
-      function operadoraPorNumero(numero) {
-        const s = String(numero || '');
-        const primeiro = s.charAt(0);
-        switch (primeiro) {
-          case '1': return 'PIRACICABANA';
-          case '2': return 'PIONEIRA';
-          case '3': return 'URBI';
-          case '4': return 'MARECHAL';
-          case '5':
-          case '7': return 'BSBUS';
-          default: return 'DESCONHECIDO';
-        }
-      }
-
-      async function atualizarVeiculos() {
-        try {
-          const res = await fetch('https://www.sistemas.dftrans.df.gov.br/service/gps/operacoes');
-          const dados = await res.json();
-
-          dados.forEach(op => {
-            (op.veiculos || []).forEach(v => {
-              const lat = v.localizacao?.latitude;
-              const lon = v.localizacao?.longitude;
-              const numero = v.numero;
-              const linha = v.linha;
-              const horario = v.horario;
-
-              if (lat == null || lon == null || numero == null) return;
-
-              const operadora = operadoraPorNumero(numero);
-              const hex = empresaCores[operadora] || '000000';
-              const icon = icons[operadora] || iconDefault;
-
-              const popupHtml = formatPopupHtml(operadora, numero, linha, horario, hex);
-
-              if (veiculosMarkers[numero]) {
-                const mk = veiculosMarkers[numero];
-                mk.setLatLng([lat, lon]);
-                mk.setPopupContent(popupHtml);
-                if (mk.options.icon !== icon) mk.setIcon(icon);
-              } else {
-                const mk = L.marker([lat, lon], { icon }).addTo(map);
-                mk.bindPopup(popupHtml);
-                veiculosMarkers[numero] = mk;
-              }
-            });
+      if(mostrarLegenda){
+        if(labels[id]){
+          labels[id].setLatLng([lat,lon]);
+        } else {
+          const cor = coresEmpresas[empresa]||"#0077b6";
+          const linhaIcon = L.divIcon({
+            className:'linha-tooltip',
+            html:`<span style="background-color:${cor}">${cd_linha}</span>`,
+            iconAnchor:[12,-12]
           });
-
-        } catch (err) {
-          console.error('Erro ao atualizarVeiculos:', err);
+          const labelMarker = L.marker([lat,lon],{icon:linhaIcon}).addTo(map);
+          labelMarker.on('click', ()=>{
+            const tempo = lastUpdateTimes[id] ? formatarTempo(Math.floor((Date.now()-lastUpdateTimes[id])/1000)) : "calculando...";
+            const popupContent = `<b>Prefixo:</b>${prefixo}<br><b>Linha:</b>${cd_linha}<br><b>Velocidade:</b>${velocidade} km/h<br><b>Empresa:</b>${empresa}<br><b>Último sinal:</b>${tempo} atrás`;
+            labelMarker.bindPopup(popupContent,{autoPan:false}).openPopup();
+            popupInfo = {id, marker: labelMarker};
+          });
+          labels[id]=labelMarker;
+        }
+        if(markers[id]){ map.removeLayer(markers[id]); delete markers[id]; }
+      } else {
+        if(!markers[id]){
+          const cor = coresEmpresas[empresa]||"#0077b6";
+          const marker = L.circleMarker([lat,lon],{
+            radius:6, fillColor:cor, color:"#fff",
+            weight:1, opacity:1, fillOpacity:0.9
+          }).addTo(map);
+          marker.bindPopup(`<b>Prefixo:</b>${prefixo}<br><b>Linha:</b>${cd_linha}<br><b>Velocidade:</b>${velocidade} km/h<br><b>Empresa:</b>${empresa}<br><b>Último sinal:</b> calculando...`,{autoPan:false});
+          marker.on('click',()=>{ popupInfo={id, marker}; marker.openPopup(); });
+          markers[id]=marker;
+        } else {
+          markers[id].setLatLng([lat,lon]);
+          if(labels[id]){ map.removeLayer(labels[id]); delete labels[id]; }
         }
       }
 
-      atualizarVeiculos();
-      setInterval(atualizarVeiculos, 1000);
-    </script>
-  </body>
+      // Atualiza popup se estiver aberto
+      if(popupInfo.id===id && popupInfo.marker){
+        const tempo=formatarTempo(Math.floor((Date.now()-lastUpdateTimes[id])/1000));
+        const popupContent = `<b>Prefixo:</b>${prefixo}<br><b>Linha:</b>${cd_linha}<br><b>Velocidade:</b>${velocidade} km/h<br><b>Empresa:</b>${empresa}<br><b>Último sinal:</b>${tempo} atrás`;
+        popupInfo.marker.setPopupContent(popupContent);
+      }
+
+    });
+  }catch(e){ console.error("Erro ao atualizar:", e); }
+}
+
+// Atualiza tempo em tempo real
+setInterval(()=>{
+  if(popupInfo.id && popupInfo.marker && lastUpdateTimes[popupInfo.id]){
+    const tempo = formatarTempo(Math.floor((Date.now()-lastUpdateTimes[popupInfo.id])/1000));
+    popupInfo.marker.setPopupContent(
+      popupInfo.marker.getPopup().getContent().replace(/Último sinal:.*?atrás/,`Último sinal: ${tempo} atrás`)
+    );
+  }
+},1000);
+
+// Filtros
+document.querySelectorAll('.empresa').forEach(c=>c.addEventListener('change',atualizarMapa));
+document.getElementById('todos').addEventListener('change',e=>{
+  const all = e.target.checked;
+  document.querySelectorAll('.empresa').forEach(c=>c.checked=all);
+  atualizarMapa();
+});
+
+// Atualizações
+atualizarMapa();
+setInterval(atualizarMapa,2000);
+
+// Troca bolinha/legenda ao mudar zoom
+map.on('zoomend',atualizarMapa);
+
+</script>
+</body>
 </html>
