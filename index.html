@@ -128,8 +128,14 @@ let linhaAtivaCor = null;
 let dadosTracado = null;
 
 async function carregarTracado() {
-  const resp = await fetch("json/tracado_linha.json");
-  dadosTracado = await resp.json();
+  try {
+    const resp = await fetch("json/tracado_linha.json");
+    if (!resp.ok) throw new Error("Erro ao carregar tracado_linha.json");
+    dadosTracado = await resp.json();
+  } catch (err) {
+    console.warn("Não foi possível carregar json/tracado_linha.json:", err);
+    dadosTracado = null;
+  }
 }
 
 carregarTracado();
@@ -194,25 +200,7 @@ function desenharTracado(cd_linha, empresa, sentidoApi){
       aplicarFiltroPorLinha(null);
       limparTracado();
     });
-  }catch(e){}
-  try{
     linhaAtivaCor.on('click', function(){
-      selectedLinha = null;
-      aplicarFiltroPorLinha(null);
-      limparTracado();
-    });
-  }catch(e){}
-
-  // tornar as polylines interativas para permitir fechar clicando nelas
-  try{
-    linhaAtivaBorda.on('click', function(e){
-      selectedLinha = null;
-      aplicarFiltroPorLinha(null);
-      limparTracado();
-    });
-  }catch(e){}
-  try{
-    linhaAtivaCor.on('click', function(e){
       selectedLinha = null;
       aplicarFiltroPorLinha(null);
       limparTracado();
@@ -349,6 +337,7 @@ function formatarDataHora(datalocal) {
   if (!datalocal) return { data: "—", hora: "—" };
 
   const d = new Date(datalocal);
+  if (isNaN(d.getTime())) return { data: "—", hora: "—" };
 
   // Formatar data dd/mm/aaaa
   const dia = String(d.getDate()).padStart(2, "0");
@@ -546,10 +535,11 @@ async function atualizarMapa(){
           if(popupInfo.id === id && popupInfo.marker){
             const popup = fullMarkers[id].getPopup();
             if(popup && popup.isOpen()){
+              // reconstruir conteúdo via função para garantir consistência
               const content = criarConteudoPopup(prefixo, cd_linha, empresa, id);
-              popup.setContent(content);
+              try { popup.setContent(content); } catch(e){}
             }
-            // garantir popup segue o marker (se por algum motivo o popup estava ligado ao marker antigo)
+            // garantir popup segue o marker
             try { fullMarkers[id].openPopup(); } catch(e){}
             popupInfo.marker = fullMarkers[id];
           }
@@ -598,7 +588,10 @@ async function atualizarMapa(){
       }
 
       // no modo full não mantemos smallMarkers; remova-os
-      for(const k in smallMarkers){ map.removeLayer(smallMarkers[k]); delete smallMarkers[k]; }
+      for(const k in smallMarkers){ 
+        try { map.removeLayer(smallMarkers[k]); } catch(e){}
+        delete smallMarkers[k];
+      }
       for(const k in idToCell){ delete idToCell[k]; }
 
     } else {
@@ -630,6 +623,7 @@ async function atualizarMapa(){
 
       // sincronizar idToCell (para limpeza)
       for(const id in idToCell){ if(!(id in idCellMap)) delete idToCell[id]; }
+      for(const id in idToCell) {} // noop to avoid linter warnings
       for(const id in idCellMap) idToCell[id] = idCellMap[id];
 
       // atualizar/criar smallMarkers pelas células
@@ -660,7 +654,7 @@ async function atualizarMapa(){
             const popup = smallMarkers[cellKey].getPopup();
             if(popup && popup.isOpen()){
               const content = criarConteudoPopup(rep.prefixo, rep.cd_linha, rep.empresa, rep.id);
-              popup.setContent(content);
+              try { popup.setContent(content); } catch(e){}
             }
             try { smallMarkers[cellKey].openPopup(); } catch(e){}
             popupInfo.marker = smallMarkers[cellKey];
@@ -727,31 +721,23 @@ setInterval(()=>{
   if(popupInfo.id && popupInfo.marker && lastUpdateTimes[popupInfo.id]){
     const popup = popupInfo.marker.getPopup();
     if(popup && popup.isOpen()){
-      const segundos = Math.floor((Date.now()-lastUpdateTimes[popupInfo.id])/1000);
-      const tempo = formatarTempo(segundos);
-      const content = criarConteudoPopup(popupInfo.id, '', /* placeholder linha não usada aqui */ '', popupInfo.id);
-      // reconstruir conteúdo completo (mantendo seu formato original)
-      // Para garantir que linha/empresa fiquem corretos, tentamos encontrar dados no fullMarkersData
+      // Reconstruir o conteúdo atual procurando dados mais recentes para este prefixo
       let prefixo = popupInfo.id;
       let cd_linha = '—';
       let empresa = '—';
       for(const f of fullMarkersData){
         const p = f.properties;
-        if(String(p.prefixo) === popupInfo.id){
-          prefixo = p.prefixo;
+        if(String(p.prefixo) === String(popupInfo.id)){
+          prefixo = String(p.prefixo);
           cd_linha = p.cd_linha || 'Sem Operação ou <br>Transferência';
           empresa = empresaPorPrefixo(prefixo);
           break;
         }
       }
-      const newContent = `<b>Linha:</b> ${cd_linha}<br>
-          <hr>
-          <b>Prefixo:</b> ${prefixo}<br>
-          <b>Empresa:</b> ${empresa}<br>
-          <b>Data:</b> ${data}<br>
-          <b>Horário:</b> ${hora}<br>
-          <b>Último sinal:</b> ${tempo} atrás`;
-      popup.setContent(newContent);
+      try {
+        const content = criarConteudoPopup(prefixo, cd_linha, empresa, popupInfo.id);
+        popup.setContent(content);
+      } catch(e) { console.error("Erro ao atualizar conteúdo do popup:", e); }
     }
   }
 },1000);
