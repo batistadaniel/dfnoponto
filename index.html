@@ -467,7 +467,11 @@ function attachHoverTooltip(marker, cd_linha_display, sentidoApi){
 /* === atualização de marcadores: evitar destruir tudo === */
 async function atualizarMapa(){
   try{
-    const resp = await fetch(DATA_URL);
+    // AQUI ESTÁ A MUDANÇA: Cache Buster adicionado
+    // Adiciona um timestamp aleatório no final da URL para evitar cache
+    const urlComBuster = DATA_URL + "&_t=" + Date.now();
+    
+    const resp = await fetch(urlComBuster);
     if(!resp.ok) throw new Error('fetch error');
     const data = await resp.json();
     const features = data.features || [];
