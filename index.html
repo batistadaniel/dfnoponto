@@ -1,1096 +1,716 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport"
-        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>DF No Ponto 4.0</title>
-
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#ffffff">
-
-    <style>
-        /* === VARIÁVEIS === */
-        :root {
-            --primary: #2563eb;
-            --bg-app: #e5e5e5;
-            --surface: rgba(255, 255, 255, 0.95);
-            --surface-solid: #ffffff;
-            --text-main: #1e293b;
-            --text-sec: #64748b;
-            --border: 1px solid rgba(0, 0, 0, 0.233);
-            --shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
-            --map-filter: none;
-
-            /* Cores das Empresas */
-            --cor-piracicabana: #449900;
-            --cor-pioneira: #ffd500;
-            --cor-urbi: #0080ff;
-            --cor-marechal: #ff9100;
-            --cor-bsbus: #4dff00;
-            --cor-desconhecido: #888888;
-        }
-
-        /* === MODO ESCURO === */
-        [data-theme="dark"] {
-            --bg-app: #121212;
-            --surface: rgba(30, 30, 30, 0.95);
-            --surface-solid: #1e1e1e;
-            --text-main: #f1f5f9;
-            --text-sec: #94a3b8;
-            --border: 1px solid rgba(255, 255, 255, 0.15);
-            --shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
-            --map-filter: brightness(0.7) invert(1) hue-rotate(180deg);
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Inter', sans-serif;
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        body,
-        html {
-            height: 100%;
-            width: 100%;
-            overflow: hidden;
-            background: var(--bg-app);
-            transition: background 0.3s;
-        }
-
-        .map-container {
-            height: 100%;
-            width: 100%;
-            position: absolute;
-            top: 0;
-            left: 0;
-        }
-
-        #map {
-            height: 100%;
-            width: 100%;
-            z-index: 0;
-            filter: var(--map-filter);
-            transition: filter 0.5s;
-        }
-
-        /* === UI ELEMENTS === */
-        .glass-panel {
-            background: var(--surface);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: var(--border);
-            box-shadow: var(--shadow);
-            border-radius: 16px;
-            color: var(--text-main);
-        }
-
-        /* === TOP BAR === */
-        .top-bar {
-            position: absolute;
-            top: max(15px, env(safe-area-inset-top));
-            left: 50%;
-            transform: translateX(-50%);
-            width: 90%;
-            max-width: 400px;
-            z-index: 1000;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .search-container {
-            width: 100%;
-            height: 48px;
-            display: flex;
-            align-items: center;
-            padding: 0 15px;
-        }
-
-        .search-icon {
-            color: var(--text-sec);
-            margin-right: 10px;
-        }
-
-        #search {
-            flex: 1;
-            border: none;
-            background: transparent;
-            font-size: 16px;
-            outline: none;
-            height: 100%;
-            font-weight: 500;
-            color: var(--text-main);
-        }
-
-        .search-tags {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            justify-content: center;
-        }
-
-        .tag {
-            background: var(--text-main);
-            color: var(--surface-solid);
-            font-size: 11px;
-            padding: 4px 10px;
-            border-radius: 20px;
-            cursor: pointer;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .suggestions {
-            background: var(--surface-solid);
-            margin-top: 5px;
-            border-radius: 12px;
-            max-height: 40vh;
-            overflow-y: auto;
-            display: none;
-            box-shadow: var(--shadow);
-            color: var(--text-main);
-        }
-
-        .suggestion-item {
-            padding: 12px 15px;
-            border-bottom: 1px solid var(--border);
-            cursor: pointer;
-            font-size: 14px;
-        }
-
-        .suggestion-item:last-child {
-            border-bottom: none;
-        }
-
-        .suggestion-item.selected,
-        .suggestion-item:hover {
-            background: rgba(128, 128, 128, 0.1);
-            color: var(--primary);
-            font-weight: 700;
-        }
-
-        /* === FLOATING BUTTONS === */
-        .fab-container {
-            position: absolute;
-            bottom: max(30px, env(safe-area-inset-bottom));
-            right: 15px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            z-index: 900;
-        }
-
-        .fab-btn {
-            width: 48px;
-            height: 48px;
-            border-radius: 14px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            cursor: pointer;
-            transition: transform 0.2s;
-            font-size: 20px;
-            background: var(--surface);
-            color: var(--text-main);
-            border: 1px solid rgba(128, 128, 128, 0.2);
-        }
-
-        .fab-btn:active {
-            transform: scale(0.95);
-        }
-
-        .fab-btn.active {
-            background: var(--primary);
-            color: #fff;
-            border: none;
-        }
-
-        /* === SIDEBAR === */
-        .sidebar-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 1100;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.3s;
-        }
-
-        .sidebar-overlay.open {
-            opacity: 1;
-            pointer-events: auto;
-        }
-
-        .sidebar-panel {
-            position: fixed;
-            top: 0;
-            left: 0;
-            height: 100%;
-            width: 280px;
-            max-width: 85%;
-            background: var(--surface-solid);
-            z-index: 1200;
-            transform: translateX(-100%);
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            display: flex;
-            flex-direction: column;
-            box-shadow: 4px 0 25px rgba(0, 0, 0, 0.2);
-        }
-
-        .sidebar-panel.open {
-            transform: translateX(0);
-        }
-
-        .sidebar-header {
-            padding: 20px;
-            background: var(--primary);
-            color: #fff;
-            font-weight: 800;
-            font-size: 18px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .sidebar-content {
-            padding: 15px;
-            overflow-y: auto;
-            flex: 1;
-            color: var(--text-main);
-        }
-
-        .stat-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 8px;
-            border-bottom: 1px solid var(--border);
-            cursor: pointer;
-            border-radius: 8px;
-        }
-
-        .stat-row:hover {
-            background-color: rgba(128, 128, 128, 0.1);
-        }
-
-        .stat-row.active-filter {
-            background-color: var(--primary);
-            color: white !important;
-        }
-
-        .stat-row.active-filter .stat-val {
-            color: white;
-        }
-
-        .stat-row.active-filter .stat-badge {
-            border: 1px solid white;
-        }
-
-        .stat-badge {
-            padding: 3px 8px;
-            border-radius: 6px;
-            color: white;
-            font-size: 12px;
-            font-weight: 700;
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-        }
-
-        .stat-val {
-            font-weight: 700;
-            font-size: 14px;
-            color: var(--text-main);
-        }
-
-        /* === CONFIGURAÇÕES === */
-        .settings-modal {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%) scale(0.9);
-            width: 90%;
-            max-width: 340px;
-            background: var(--surface-solid);
-            border-radius: 24px;
-            z-index: 1300;
-            padding: 24px;
-            opacity: 0;
-            pointer-events: none;
-            transition: all 0.2s;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-            color: var(--text-main);
-        }
-
-        .settings-modal.open {
-            opacity: 1;
-            pointer-events: auto;
-            transform: translate(-50%, -50%) scale(1);
-        }
-
-        .settings-group {
-            margin-bottom: 24px;
-        }
-
-        .settings-label {
-            font-weight: 700;
-            margin-bottom: 8px;
-            display: block;
-            font-size: 13px;
-            color: var(--text-sec);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .theme-options {
-            display: flex;
-            gap: 8px;
-        }
-
-        .theme-btn {
-            flex: 1;
-            padding: 10px;
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            text-align: center;
-            font-size: 13px;
-            cursor: pointer;
-            background: rgba(128, 128, 128, 0.05);
-            font-weight: 500;
-        }
-
-        .theme-btn.active {
-            background: var(--primary);
-            color: white;
-            border-color: var(--primary);
-            font-weight: 700;
-        }
-
-        /* Cores Color Picker custom */
-        .color-picker-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-top: 10px;
-            background: rgba(128, 128, 128, 0.05);
-            padding: 8px 12px;
-            border-radius: 12px;
-        }
-
-        .icon-style-option {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 12px;
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            margin-bottom: 8px;
-            cursor: pointer;
-            transition: 0.2s;
-        }
-
-        .icon-style-option.selected {
-            border: 2px solid var(--primary);
-            background: rgba(37, 99, 235, 0.05);
-        }
-
-        /* Botão fechar dinâmico */
-        .btn-close-settings {
-            width: 100%;
-            padding: 14px;
-            background: var(--primary);
-            color: white;
-            border: none;
-            border-radius: 14px;
-            font-weight: 800;
-            cursor: pointer;
-            font-size: 14px;
-        }
-
-        .btn-close-settings.dark-text {
-            color: #000;
-        }
-
-        .btn-close-settings.light-text {
-            color: #fff;
-        }
-
-        /* === FILTRO POPUP === */
-        .filter-popup {
-            position: absolute;
-            bottom: 150px;
-            right: 15px;
-            width: 220px;
-            padding: 16px;
-            z-index: 1000;
-            display: none;
-            transform-origin: bottom right;
-            animation: scaleIn 0.2s ease;
-        }
-
-        .filter-popup.show {
-            display: block;
-        }
-
-        .filter-option {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 10px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-        }
-
-        /* === MARCADORES MAPA === */
-        /* CORREÇÃO: Removemos o transform daqui para o Leaflet posicionar corretamente */
-        .bus-marker-container {
-            background: transparent;
-            width: 0;
-            height: 0;
-        }
-
-        /* NOVO: Wrapper interno para centralizar o conteúdo visualmente */
-        .bus-marker-inner {
-            position: absolute;
-            transform: translate(-50%, -50%);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            width: max-content;
-            pointer-events: auto;
-        }
-
-        /* Reduzido tamanho e fonte */
-        .bus-label-style-a {
-            background: #fff;
-            border: 3px solid #000;
-            color: #000;
-            font-weight: 800;
-            font-size: 10px;
-            padding: 1px 4px;
-            border-radius: 6px;
-            text-align: center;
-            white-space: nowrap;
-            box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.3);
-        }
-
-        .bus-label-style-b {
-            background: #000;
-            border: 2px solid #000;
-            color: #000;
-            /* BG via inline */
-            font-weight: 800;
-            font-size: 10px;
-            padding: 1px 4px;
-            border-radius: 6px;
-            text-align: center;
-            white-space: nowrap;
-            /* box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25); */
-            /* text-shadow: 0 0 2px rgba(255, 255, 255, 0.4); */
-        }
-
-        /* === POPUP MAPA === */
-        .leaflet-popup-content-wrapper {
-            background: var(--surface-solid);
-            color: var(--text-main);
-            border-radius: 16px;
-            padding: 0;
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
-        }
-
-        .leaflet-popup-content {
-            margin: 0 !important;
-            width: 220px !important;
-            line-height: 1.4;
-        }
-
-        .leaflet-container a.leaflet-popup-close-button {
-            top: 8px;
-            right: 8px;
-            color: var(--text-main);
-            font-size: 18px;
-        }
-
-        .popup-header {
-            background: rgba(128, 128, 128, 0.08);
-            padding: 12px;
-            font-weight: 800;
-            text-align: center;
-            border-radius: 16px 16px 0 0;
-            font-size: 15px;
-        }
-
-        .popup-body {
-            padding: 12px 16px;
-            font-size: 13px;
-        }
-
-        .popup-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 5px;
-            align-items: flex-start;
-        }
-
-        .popup-label {
-            color: var(--text-sec);
-            font-weight: 500;
-        }
-
-        .popup-val {
-            font-weight: 700;
-            color: var(--text-main);
-            text-align: right;
-        }
-
-        /* Seta do popup no modo escuro deve seguir o background do content wrapper */
-        .leaflet-popup-tip {
-            background: var(--surface-solid);
-        }
-
-        /* User Location Marker */
-        .user-location-marker {
-            width: 16px;
-            height: 16px;
-            background: #2563eb;
-            border: 3px solid #fff;
-            border-radius: 50%;
-            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.3);
-        }
-
-        @keyframes scaleIn {
-            from {
-                opacity: 0;
-                transform: scale(0.9);
-            }
-
-            to {
-                opacity: 1;
-                transform: scale(1);
-            }
-        }
-    </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>DF No Ponto 3.0</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#000000">
+<style>
+  :root {
+    --primary: #2563eb;
+    --surface: rgba(255, 255, 255, 0.96);
+    --text-dark: #1e293b;
+    --text-gray: #64748b;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; font-family: 'Inter', sans-serif; }
+  
+  body, html, #map { height:100%; width:100%; overflow: hidden; background: #ddd; }
+
+  body {
+    background-color: #f4f4f4;
+    min-height: 100vh;
+    margin: 0; padding: 0; /* ZERADO */
+    overflow: hidden;
+}
+  /* === GERAL UI === */
+  .ui-panel {
+    background: var(--surface);
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+    border-radius: 12px;
+    padding: 10px;
+    font-size: 12px;
+    color: var(--text-dark);
+    scrollbar-width: none; -ms-overflow-style: none;
+  }
+  .ui-panel::-webkit-scrollbar { display: none; }
+
+  /* === PAINÉIS LATERAIS (DESKTOP) === */
+  .stats-wrapper {
+    position: absolute; top: 10px; left: 10px;
+    display: flex; flex-direction: column; gap: 8px;
+    z-index: 1000;
+    width: 220px;
+    max-height: 95vh;
+    pointer-events: none; 
+  }
+  .stats-wrapper .ui-panel { pointer-events: auto; }
+
+  .live-container { display: flex; flex-direction: column; max-height: 60vh; }
+  .live-fixed-header { flex-shrink: 0; border-bottom: 1px solid #e2e8f0; margin-bottom: 5px; padding-bottom: 5px;}
+  .live-scroll-area { flex-grow: 1; overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; }
+  .live-scroll-area::-webkit-scrollbar { display: none; }
+
+  .stats-row { 
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 4px; border-bottom: 1px solid #f1f5f9; padding-bottom: 3px; cursor: pointer;
+  }
+  /*.stats-row:hover { background-color: #f1f5f9; }*/
+  .stats-header { font-weight: 800; font-size: 15px; margin-bottom: 8px; border-bottom: 2px solid #5a5959; padding-bottom: 4px; color: #000; }
+  
+  .company-badge {
+      color: white; padding: 2px 8px; border-radius: 12px;
+      font-weight: 700; font-size: 13px; display: inline-block;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  }
+  .clickable-row { cursor: pointer; transition: opacity 0.2s; }
+  .clickable-row:active { transform: scale(0.98); }
+
+  .live-panel-header { display: flex; justify-content: space-between; align-items: center; cursor: pointer; font-weight: 700; color: #000000; font-size: 15px; }
+  .live-panel-header .vivo { background-color: #ef4444; padding: 4px; border-radius: 8px; color: white; font-size: 13px; font-weight: 800; }
+  .live-content { display: none; margin-top: 5px; }
+  .live-content.open { display: block; }
+
+  /* === MENU MOBILE === */
+  .mobile-menu-btn {
+    position: absolute; top: 15px; left: 15px; z-index: 1100;
+    width: 40px; height: 40px; background: var(--surface);
+    border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    display: none; flex-direction: column; justify-content: center; align-items: center; gap: 4px; cursor: pointer;
+  }
+  .bar { width: 20px; height: 3px; background: #333; border-radius: 2px; }
+
+  .mobile-sidebar {
+    position: absolute; top: 0; left: 0; height: 100%; width: 80%;
+    background: #fff; z-index: 1200;
+    transform: translateX(-100%); transition: transform 0.3s ease;
+    box-shadow: 2px 0 15px rgba(0,0,0,0.2);
+    display: flex; flex-direction: column;
+  }
+  .mobile-sidebar.active { transform: translateX(0); }
+  .sidebar-header { padding: 20px; background: var(--primary); color: white; font-weight: 800; font-size: 18px; display: flex; justify-content: space-between; align-items: center; }
+  .sidebar-content { padding: 15px; overflow-y: auto; flex-grow: 1; }
+  .mobile-overlay { position: absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index: 1150; display: none; }
+  .mobile-overlay.active { display: block; }
+
+  /* === BUSCA === */
+  .search-wrapper {
+    position: absolute;
+    /* Usa 10px + o tamanho da área segura */
+    top: calc(10px + env(safe-area-inset-top)); 
+    right: 10px;
+    width: 280px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+}
+  .search-input-box { position: relative; width: 100%; background: var(--surface); border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+  #search { width: 100%; height: 40px; padding: 0 15px 0 35px; border: none; background: transparent; font-size: 14px; outline: none; border-radius: 8px; }
+  .search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #64748b; }
+  
+  .suggestions { background: #fff; border-top: 1px solid #eee; max-height: 250px; overflow-y: auto; display: none; border-radius: 0 0 8px 8px; margin-top: 2px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+  .suggestion-item { padding: 8px 12px; border-bottom: 1px solid #f1f5f9; cursor: pointer; font-size: 13px; }
+  .suggestion-item.selected { background: #e0f2fe; color: var(--primary); font-weight: 700; }
+  .suggestion-item:hover { background: #f1f5f9; }
+  
+  .search-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; justify-content: flex-end; }
+  .tag { background: #1e293b; color: #fff; font-size: 10px; padding: 3px 8px; border-radius: 10px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 4px; }
+
+  /* === FILTROS (MODIFICADO: ABERTO E FIXO) === */
+  .filtro-container {
+    position: absolute; 
+    /* bottom: 20px;  */
+    bottom: calc(20px + env(safe-area-inset-bottom));
+    right: 15px; /* Canto direito */
+    width: 160px; /* Largura fixa aberto */
+    height: auto; 
+    padding: 12px;
+    display: flex; 
+    flex-direction: column; 
+    gap: 8px;
+    z-index: 1000; 
+    background: var(--surface);
+    border-radius: 12px; 
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+  
+  /* Removemos o botão de toggle pois vai ficar fixo aberto */
+  .filtro-toggle { display: none; }
+  
+  .filtro-content { 
+      margin-top: 0; 
+      opacity: 1; 
+      display: flex; 
+    flex-direction: column; 
+    gap: 6px;
+  }
+  
+  .filtro-container label { display: flex; align-items: center; gap: 8px; /*margin-bottom: 8px;*/ font-size: 12px; font-weight: 500; cursor: pointer; }
+
+  /* === MARCADORES & TOOLTIPS === */
+  .line-label {
+    display:inline-block; white-space: nowrap; cursor: pointer; font-weight:700;
+    text-align:center; line-height:1; padding:2px 5px;
+    border:2px solid #000; font-size:12px; border-radius:8px;
+    color: #000; box-shadow: 2px 2px 0px rgba(0,0,0,0.3);
+    background: rgba(255,255,255,0.95);
+  }
+  .hover-tooltip {
+    background: rgba(255,255,255,0.95); color: #000; border: 1px solid rgba(0,0,0,0.2);
+    padding: 4px 8px; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+    font-weight: 700; font-size: 12px;
+  }
+
+  /* === POPUP === */
+  .leaflet-popup-content-wrapper {
+    border-radius: 16px !important; box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    padding: 0; overflow: hidden;
+  }
+  .leaflet-popup-content { margin: 0; width: 200px; }
+  .custom-popup { color: var(--text-dark); }
+  .popup-header {
+    text-align: center; font-size: 16px; font-weight: 800;
+    padding: 12px 0 8px 0; letter-spacing: -0.5px;
+    background: #fff;
+  }
+  .custom-popup hr { border: 0; border-top: 1px solid #e2e8f0; margin: 0; }
+  .popup-body { padding: 10px 15px; font-size: 13px; line-height: 1.1; background: #fff; }
+  .popup-row { margin-bottom: 2px; }
+  .popup-label { font-weight: 800; color: var(--text-dark); margin-right: 4px; }
+  .popup-value { font-weight: 400; color: #334155; }
+
+  /* Responsividade */
+  @media (max-width: 768px) {
+    .stats-wrapper { display: none; }
+    .mobile-menu-btn { display: flex; }
+    .search-wrapper { left: 60px; width: auto; right: 10px; top: 15px; }
+    /* Filtros fixos no mobile tbm no canto direito */
+    .filtro-container { bottom: 20px; right: 15px; }
+  }
+</style>
 </head>
-
 <body>
 
-    <div class="map-container">
-        <div id="map"></div>
+<div class="mobile-menu-btn" onclick="toggleSidebar()">
+  <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+</div>
+
+<div class="mobile-overlay" onclick="toggleSidebar()"></div>
+<div class="mobile-sidebar" id="mobileSidebar">
+  <div class="sidebar-header">
+      <span>Resumo Operacional</span>
+      <span onclick="toggleSidebar()" style="cursor:pointer">✕</span>
+  </div>
+  <div class="sidebar-content" id="mobile-content-target"></div>
+</div>
+
+<div class="stats-wrapper">
+    <div class="ui-panel" id="panel-general">
+        <div class="stats-header">Total de Veículos</div>
+        <div id="simple-stats-content">Carregando...</div>
     </div>
-
-    <div class="top-bar">
-        <div class="glass-panel search-container">
-            <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                stroke-width="2.5">
-                <circle cx="11" cy="11" r="8"></circle>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-            </svg>
-            <input type="text" id="search" placeholder="Buscar linha ou prefixo..." autocomplete="off">
+    <div class="ui-panel" id="panel-live">
+        <div class="live-panel-header" onclick="toggleLivePanel()">
+            <span>Painel <span class="vivo">Ao Vivo</span></span>
+            <span class="chevron" id="live-chevron">⌄</span>
         </div>
-        <div id="search-tags" class="search-tags"></div>
-        <div id="suggestions" class="suggestions"></div>
-    </div>
-
-    <div class="fab-container">
-        <div class="fab-btn glass-panel" onclick="toggleSettings()">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="3"></circle>
-                <path
-                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
-                </path>
-            </svg>
-        </div>
-        <div class="fab-btn glass-panel" onclick="toggleSidebar()">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
-                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
-                <path d="M9 14h6"></path>
-                <path d="M9 10h6"></path>
-                <path d="M9 18h6"></path>
-            </svg>
-        </div>
-        <div class="fab-btn glass-panel" id="btn-filter" onclick="toggleFiltersPopup()">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
-            </svg>
-        </div>
-        <div class="fab-btn glass-panel" id="btn-location" onclick="toggleLocation()">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"></circle>
-                <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"></circle>
-            </svg>
-        </div>
-    </div>
-
-    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
-    <div class="sidebar-panel" id="sidebar">
-        <div class="sidebar-header">
-            <span>Resumo Operacional</span>
-            <span onclick="toggleSidebar()" style="cursor:pointer">✕</span>
-        </div>
-        <div class="sidebar-content">
-            <h4 style="margin: 10px 0; font-size:12px; text-transform:uppercase; color:var(--text-sec);">Resumo da Frota
-            </h4>
-            <div id="stats-content">Carregando...</div>
-            <h4 style="margin: 20px 0 10px 0; font-size:12px; text-transform:uppercase; color:var(--text-sec);">Sem
-                Linha Definida</h4>
-            <div id="stats-noline">--</div>
-        </div>
-    </div>
-
-    <div class="sidebar-overlay" id="settings-overlay" onclick="toggleSettings()"></div>
-    <div class="settings-modal" id="settings-modal">
-        <h3 style="margin-bottom:20px; text-align:center; font-weight:800;">Configurações</h3>
-
-        <div class="settings-group">
-            <label class="settings-label">Tema da Aplicação</label>
-            <div class="theme-options">
-                <div class="theme-btn" onclick="setTheme('auto')" id="theme-auto">Auto</div>
-                <div class="theme-btn" onclick="setTheme('light')" id="theme-light">Claro</div>
-                <div class="theme-btn" onclick="setTheme('dark')" id="theme-dark">Escuro</div>
+        <div class="live-content" id="live-content">
+            <div class="live-container">
+                <div class="live-fixed-header">
+                    <div style="font-weight:bold; color:#64748b; font-size:12px; margin:10px 0;">VEÍCULOS SEM LINHA</div>
+                    <div id="noline-stats-content">--</div>
+                    <div style="font-weight:bold; color:#64748b; font-size:12px; margin-top:8px;">TODAS AS LINHAS (QTD)</div>
+                </div>
+                <div class="live-scroll-area">
+                    <div id="alllines-stats-content">--</div>
+                </div>
             </div>
         </div>
-
-        <div class="settings-group">
-            <label class="settings-label">Cor de Destaque (App)</label>
-            <div class="color-picker-row">
-                <span style="font-size:13px; font-weight:600;">Personalizada</span>
-                <input type="color" id="custom-color-picker"
-                    style="width:30px; height:30px; border:none; background:none; cursor:pointer;"
-                    onchange="setCustomColor(this.value)">
-            </div>
-        </div>
-
-        <div class="settings-group">
-            <label class="settings-label">Estilo dos Marcadores</label>
-            <div class="icon-style-option" onclick="setIconStyle('A')" id="style-a">
-                <div
-                    style="background:#fff; border:2px solid var(--primary); color:#000; padding:1px 6px; border-radius:6px; font-weight:800; font-size:10px;">
-                    123</div>
-                <span style="font-size:13px;">Fundo Branco</span>
-            </div>
-            <div class="icon-style-option" onclick="setIconStyle('B')" id="style-b">
-                <div
-                    style="background:var(--primary); border:2px solid #000; color:#000; padding:1px 6px; border-radius:6px; font-weight:800; font-size:10px;">
-                    123</div>
-                <span style="font-size:13px;">Fundo Colorido</span>
-            </div>
-        </div>
-
-        <div class="settings-group">
-            <label class="settings-label">Borda do Traçado</label>
-            <div class="theme-options">
-                <div class="theme-btn" onclick="setRouteBorder('white')" id="route-white">Branca</div>
-                <div class="theme-btn" onclick="setRouteBorder('black')" id="route-black">Preta</div>
-            </div>
-        </div>
-
-        <button id="btn-close-settings" class="btn-close-settings" onclick="toggleSettings()">FECHAR</button>
     </div>
+</div>
 
-    <div class="glass-panel filter-popup" id="filter-popup">
-        <div style="font-weight:800; margin-bottom:12px; font-size:12px; color:var(--text-sec); letter-spacing:0.5px;">
-            FILTRAR EMPRESAS</div>
-        <label class="filter-option"><input type="checkbox" id="chk-todos" checked> <span>Todas</span></label>
-        <div style="height:1px; background:var(--border); margin:8px 0;"></div>
-        <label class="filter-option"><input class="chk-empresa" type="checkbox" value="PIRACICABANA" checked> <span
-                style="color:var(--cor-piracicabana)">Piracicabana</span></label>
-        <label class="filter-option"><input class="chk-empresa" type="checkbox" value="PIONEIRA" checked> <span
-                style="color:var(--cor-pioneira)">Pioneira</span></label>
-        <label class="filter-option"><input class="chk-empresa" type="checkbox" value="URBI" checked> <span
-                style="color:var(--cor-urbi)">Urbi</span></label>
-        <label class="filter-option"><input class="chk-empresa" type="checkbox" value="MARECHAL" checked> <span
-                style="color:var(--cor-marechal)">Marechal</span></label>
-        <label class="filter-option"><input class="chk-empresa" type="checkbox" value="BSBUS" checked> <span
-                style="color:var(--cor-bsbus)">BsBus</span></label>
-        <div style="height:1px; background:var(--border); margin:8px 0;"></div>
-        <label class="filter-option"><input type="checkbox" id="chk-sem-linha"> <span>Apenas Sem Linha</span></label>
-    </div>
+<div class="search-wrapper">
+  <div class="search-input-box">
+    <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+    <input type="text" id="search" placeholder="Procurar linha ou prefixo..." autocomplete="off">
+  </div>
+  <div id="suggestions" class="suggestions"></div>
+  <div id="search-tags" class="search-tags"></div>
+</div>
 
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+<div class="filtro-container" id="filtro-panel">
+  <div class="filtro-content">
+    <label style="color:#ef4444; font-weight:700;"><input id="chk-sem-linha" type="checkbox"> Apenas sem linha</label>
+    <label><input id="chk-todos" type="checkbox" > Todas</label>
+    <label><input class="chk-empresa" type="checkbox" value="PIRACICABANA" > Piracicabana</label>
+    <label><input class="chk-empresa" type="checkbox" value="PIONEIRA" > Pioneira</label>
+    <label><input class="chk-empresa" type="checkbox" value="URBI" checked> Urbi</label>
+    <label><input class="chk-empresa" type="checkbox" value="MARECHAL" checked> Marechal</label>
+    <label><input class="chk-empresa" type="checkbox" value="BSBUS" > BsBus</label>
+  </div>
+</div>
 
-    <script>
-        // --- VARIAVEIS GLOBAIS ---
-        // http://localhost:3000/api/geojson
-        const BASE_API_URL = "https://corsproxy.io/?https%3A%2F%2Fgeoserver.semob.df.gov.br%2Fgeoserver%2Fsemob%2Fows%3Fservice%3DWFS%26version%3D1.0.0%26request%3DGetFeature%26typeName%3Dsemob%253A%25C3%259Altima%2520posi%25C3%25A7%25C3%25A3o%2520da%2520frota%26outputFormat%3Dapplication%252Fjson";
-        const CORES = {
-            "PIRACICABANA": "#449900", "PIONEIRA": "#ffd500", "URBI": "#0080ff",
-            "MARECHAL": "#ff9100", "BSBUS": "#4dff00", "DESCONHECIDO": "#888888"
-        };
+<div id="map"></div>
 
-        let appState = {
-            theme: localStorage.getItem('appTheme') || 'auto',
-            iconStyle: localStorage.getItem('iconStyle') || 'A',
-            customColor: localStorage.getItem('customColor') || '#2563eb',
-            routeBorder: localStorage.getItem('routeBorder') || 'white'
-        };
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
 
-        const map = L.map('map', { zoomControl: false }).setView([-15.7942, -47.8822], 11);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 19, attribution: '' }).addTo(map);
+<script>
+const BASE_API_URL = "https://corsproxy.io/?https%3A%2F%2Fgeoserver.semob.df.gov.br%2Fgeoserver%2Fsemob%2Fows%3Fservice%3DWFS%26version%3D1.0.0%26request%3DGetFeature%26typeName%3Dsemob%253A%25C3%259Altima%2520posi%25C3%25A7%25C3%25A3o%2520da%2520frota%26outputFormat%3Dapplication%252Fjson";
 
-        const clusterGroup = L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 40, disableClusteringAtZoom: 16, showCoverageOnHover: false });
-        const singleLayerGroup = L.layerGroup();
-        map.addLayer(clusterGroup);
+const CORES = {
+  "PIRACICABANA": "#449900", "PIONEIRA": "#ffd500", "URBI": "#0080ff",
+  "MARECHAL": "#ff9100", "BSBUS": "#4dff00", "DESCONHECIDO": "#999999"
+};
 
-        let markersRegistry = {};
-        let todosDados = [];
-        let termosBusca = [];
-        let dadosTracado = null;
-        let linhasTracado = [];
-        let activeFilter = { type: null, value: null };
-        let linhaSelecionadaClick = null;
-        let userMarker = null;
-        let watchId = null;
+const map = L.map('map', {zoomControl: false}).setView([-15.7942, -47.8822], 11);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
 
-        // --- INICIALIZAÇÃO E CONFIG ---
-        function initApp() {
-            if (appState.customColor) {
-                document.documentElement.style.setProperty('--primary', appState.customColor);
-                document.getElementById('custom-color-picker').value = appState.customColor;
-                updateCloseButtonContrast(appState.customColor);
-            }
-            setTheme(appState.theme, false);
-            setIconStyle(appState.iconStyle, false);
-            setRouteBorder(appState.routeBorder, false);
+const clusterGroup = L.markerClusterGroup({
+  chunkedLoading: true, maxClusterRadius: 45, disableClusteringAtZoom: 16, spiderfyOnMaxZoom: true, showCoverageOnHover: false
+});
+const singleLayerGroup = L.layerGroup(); 
+map.addLayer(clusterGroup);
+
+const markersRegistry = {}; 
+let todosDados = [];
+let termosBusca = [];
+let dadosTracado = null; 
+let linhasTracado = []; 
+let linhaSelecionadaClick = null; 
+let filtroEmpresaPanel = null;
+let filtroSemLinhaEmpresa = null; 
+let lastStatsUpdate = 0; // Controle para atualizar stats a cada 1 minuto
+
+async function carregarTracado() {
+  try {
+    const res = await fetch('json/tracado_linha.json');
+    if (res.ok) dadosTracado = await res.json();
+  } catch (err) {}
+}
+carregarTracado();
+
+function limparTracado() {
+    linhasTracado.forEach(l => map.removeLayer(l));
+    linhasTracado = [];
+}
+
+function desenharTracado(cd_linha, empresa, sentidoApi) {
+    if (!dadosTracado || !cd_linha) return;
+    limparTracado();
+    const candidatos = dadosTracado.filter(x => String(x.cd_linha) === String(cd_linha));
+    if (!candidatos.length) return;
+    let sentidoNome = (sentidoApi === '0' || sentidoApi === 0) ? 'IDA' : 'VOLTA';
+    let rota = candidatos.find(c => String(c.sentido_linha).toUpperCase() === sentidoNome) || candidatos.find(c => String(c.sentido_linha).toUpperCase() === 'CIRCULAR') || candidatos[0];
+
+    try {
+        const coords = JSON.parse(rota.tracado_linha);
+        const cor = CORES[empresa] || '#000';
+        const borda = L.polyline(coords, { color: 'black', weight: 6, opacity: 0.9 }).addTo(map);
+        const miolo = L.polyline(coords, { color: cor, weight: 4, opacity: 1 }).addTo(map);
+        linhasTracado.push(borda, miolo);
+        map.fitBounds(miolo.getBounds(), { padding: [50, 50] });
+    } catch (e) {}
+}
+
+function calcularEstatisticas() {
+    const stats = { total: 0, porEmpresa: {}, semLinhaTotal: 0, semLinhaPorEmpresa: {}, linhasQtd: {} };
+    Object.keys(CORES).forEach(emp => { stats.porEmpresa[emp] = 0; stats.semLinhaPorEmpresa[emp] = 0; });
+
+    todosDados.forEach(f => {
+        const p = f.properties;
+        const emp = getEmpresa(p.prefixo);
+        stats.total++;
+        if (stats.porEmpresa[emp] !== undefined) stats.porEmpresa[emp]++;
+
+        if (!p.cd_linha || p.cd_linha.trim() === "") {
+            stats.semLinhaTotal++;
+            if (stats.semLinhaPorEmpresa[emp] !== undefined) stats.semLinhaPorEmpresa[emp]++;
+        } else {
+            if (!stats.linhasQtd[p.cd_linha]) stats.linhasQtd[p.cd_linha] = 0;
+            stats.linhasQtd[p.cd_linha]++;
         }
+    });
+    atualizarDOMStats(stats);
+}
 
-        function setTheme(mode, save = true) {
-            document.querySelectorAll('.theme-options .theme-btn').forEach(b => { if (b.id.startsWith('theme-')) b.classList.remove('active'); });
-            document.getElementById(`theme-${mode}`)?.classList.add('active');
+function atualizarDOMStats(stats) {
+    const badge = (emp) => `<span class="company-badge" style="background:${CORES[emp] || '#999'}">${emp}</span>`;
 
-            if (mode === 'auto') {
-                const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-                document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
-            } else {
-                document.documentElement.setAttribute('data-theme', mode);
-            }
-            if (save) { appState.theme = mode; localStorage.setItem('appTheme', mode); }
+    let simpleHTML = `
+        <div class="stats-row clickable-row" onclick="filtrarPorEmpresaRapido(null)">
+            <span class="stats-label" style="font-weight:800">TOTAL (Limpar)</span><span class="stats-val">${stats.total}</span>
+        </div>`;
+    for (const [emp, val] of Object.entries(stats.porEmpresa)) {
+        if(emp !== 'DESCONHECIDO' && val > 0) {
+            simpleHTML += `
+            <div class="stats-row clickable-row" onclick="filtrarPorEmpresaRapido('${emp}')">
+                <span class="stats-label">${badge(emp)}</span><span class="stats-val">${val}</span>
+            </div>`;
         }
+    }
 
-        function setCustomColor(color) {
-            document.documentElement.style.setProperty('--primary', color);
-            appState.customColor = color;
-            localStorage.setItem('customColor', color);
-            updateCloseButtonContrast(color);
-        }
+    let noLineHTML = `<div class="stats-row clickable-row" onclick="filtrarSemLinhaPorEmpresaRapido(null)"><span class="stats-label" style="font-weight:800">Total S/ Linha (Limpar)</span><span class="stats-val">${stats.semLinhaTotal}</span></div>`;
+    for (const [emp, val] of Object.entries(stats.semLinhaPorEmpresa)) {
+         if(emp !== 'DESCONHECIDO' && val > 0) {
+            noLineHTML += `
+            <div class="stats-row clickable-row" onclick="filtrarSemLinhaPorEmpresaRapido('${emp}')">
+                <span class="stats-label">${badge(emp)}</span><span class="stats-val">${val}</span>
+            </div>`;
+         }
+    }
 
-        function updateCloseButtonContrast(hexColor) {
-            const r = parseInt(hexColor.substr(1, 2), 16);
-            const g = parseInt(hexColor.substr(3, 2), 16);
-            const b = parseInt(hexColor.substr(5, 2), 16);
-            const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
-            const btn = document.getElementById('btn-close-settings');
-            btn.classList.remove('dark-text', 'light-text');
-            btn.classList.add(yiq >= 128 ? 'dark-text' : 'light-text');
-        }
+    const sortedLines = Object.entries(stats.linhasQtd).sort((a,b) => b[1] - a[1]);
+    let linesHTML = "";
+    sortedLines.forEach(([linha, qtd]) => {
+        linesHTML += `
+        <div class="stats-row clickable-row" onclick="filtrarPorLinhaRapido('${linha}')">
+            <span class="stats-label">${linha}</span><span class="stats-val">${qtd}</span>
+        </div>`;
+    });
 
-        function setIconStyle(style, save = true) {
-            document.querySelectorAll('.icon-style-option').forEach(o => o.classList.remove('selected'));
-            document.getElementById(`style-${style.toLowerCase()}`).classList.add('selected');
-            if (save) { appState.iconStyle = style; localStorage.setItem('iconStyle', style); renderizarMapa(); }
-        }
+    document.getElementById('simple-stats-content').innerHTML = simpleHTML;
+    document.getElementById('noline-stats-content').innerHTML = noLineHTML;
+    document.getElementById('alllines-stats-content').innerHTML = linesHTML;
 
-        function setRouteBorder(color, save = true) {
-            document.getElementById('route-white').classList.toggle('active', color === 'white');
-            document.getElementById('route-black').classList.toggle('active', color === 'black');
-            if (save) {
-                appState.routeBorder = color;
-                localStorage.setItem('routeBorder', color);
-                if (linhaSelecionadaClick) {
-                    const v = todosDados.find(f => String(f.properties.cd_linha) === String(linhaSelecionadaClick));
-                    if (v) desenharTracado(linhaSelecionadaClick, getEmpresa(v.properties.prefixo), v.properties.sentido);
-                }
-            }
-        }
-
-        // --- DADOS ---
-        async function carregarTracado() { try { const res = await fetch('json/tracado_linha.json'); if (res.ok) dadosTracado = await res.json(); } catch (err) { } }
-        carregarTracado();
-
-        async function atualizarDados() {
-            try {
-                // const req = await fetch(`${BASE_API_URL}&_t=${Date.now()}`);
-                const url = BASE_API_URL;
-                const req = await fetch(url);
-                const json = await req.json();
-                if (json.features) { todosDados = json.features; renderizarMapa(); atualizarEstatisticas(); }
-            } catch (e) { }
-        }
-        setInterval(atualizarDados, 5000);
-        atualizarDados();
-
-        // --- RENDER MAPA ---
-        function renderizarMapa() {
-            const chkEmpresas = Array.from(document.querySelectorAll('.chk-empresa:checked')).map(cb => cb.value);
-            const chkSemLinha = document.getElementById('chk-sem-linha').checked;
-            let usarCluster = !(activeFilter.value || linhaSelecionadaClick);
-
-            const targetGroup = usarCluster ? clusterGroup : singleLayerGroup;
-            const oldGroup = usarCluster ? singleLayerGroup : clusterGroup;
-
-            if (map.hasLayer(oldGroup)) { map.removeLayer(oldGroup); map.addLayer(targetGroup); oldGroup.clearLayers(); targetGroup.clearLayers(); markersRegistry = {}; }
-
-            const validIds = new Set();
-
-            todosDados.forEach(feature => {
-                const p = feature.properties;
-                if (!p.latitude || parseFloat(p.latitude) === 0) return;
-                const empresa = getEmpresa(p.prefixo);
-
-                let visivel = true;
-                if (linhaSelecionadaClick) {
-                    if (String(p.cd_linha) !== String(linhaSelecionadaClick)) visivel = false;
-                } else if (termosBusca.length > 0) {
-                    const txt = (String(p.cd_linha) + " " + String(p.prefixo)).toLowerCase();
-                    if (!termosBusca.some(t => txt.includes(t.toLowerCase()))) visivel = false;
-                } else if (activeFilter.type) {
-                    if (activeFilter.type === 'empresa' && empresa !== activeFilter.value) visivel = false;
-                    if (activeFilter.type === 'sem_linha') {
-                        if (activeFilter.value && empresa !== activeFilter.value) visivel = false;
-                        if (p.cd_linha && p.cd_linha.trim() !== "") visivel = false;
-                    }
-                } else {
-                    if (!chkEmpresas.includes(empresa)) visivel = false;
-                    if (chkSemLinha && p.cd_linha && p.cd_linha.trim() !== "") visivel = false;
-                }
-                if (!visivel) return;
-
-                const id = String(p.prefixo);
-                validIds.add(id);
-                const lat = parseFloat(p.latitude);
-                const lng = parseFloat(p.longitude);
-                const cor = CORES[empresa];
-                const txt = p.cd_linha || p.prefixo;
-
-                // WRAPPER INTERNO PARA CENTRALIZAR O ÍCONE (CORREÇÃO DE POSIÇÃO)
-                const htmlIcon = appState.iconStyle === 'A'
-                    ? `<div class="bus-marker-inner"><div class="bus-label-style-a" style="border-color:${cor}">${txt}</div></div>`
-                    : `<div class="bus-marker-inner"><div class="bus-label-style-b" style="background:${cor}">${txt}</div></div>`;
-
-                // DivIcon SEM tamanho fixo (0,0) para que o wrapper interno faça o offset
-                const icon = L.divIcon({ className: 'bus-marker-container', html: htmlIcon, iconSize: [0, 0] });
-
-                if (markersRegistry[id]) {
-                    const marker = markersRegistry[id];
-                    marker.setLatLng([lat, lng]);
-                    marker.setIcon(icon);
-                    if (marker.getPopup() && marker.getPopup().isOpen()) marker.getPopup().setContent(criarPopup(p, empresa));
-                    else marker.setPopupContent(criarPopup(p, empresa));
-                    if (!targetGroup.hasLayer(marker)) targetGroup.addLayer(marker);
-                } else {
-                    const marker = L.marker([lat, lng], { icon: icon });
-                    marker.bindPopup(criarPopup(p, empresa));
-                    marker.on('click', (e) => { L.DomEvent.stopPropagation(e); selectingLinha(p.cd_linha, empresa, p.sentido); });
-                    targetGroup.addLayer(marker);
-                    markersRegistry[id] = marker;
-                }
-            });
-
-            for (let id in markersRegistry) { if (!validIds.has(id)) { targetGroup.removeLayer(markersRegistry[id]); delete markersRegistry[id]; } }
-        }
-
-        // --- POPUP & FORMATACAO ---
-        function parseDataManual(dataStr) {
-            if (!dataStr) return null;
-            const p = dataStr.split(' '); if (p.length < 2) return null;
-            const d = p[0].split('-'); const h = p[1].split(':');
-            return new Date(parseInt(d[0]), parseInt(d[1]) - 1, parseInt(d[2]), parseInt(h[0]), parseInt(h[1]), parseInt(h[2]));
-        }
-
-        function formatRelativeTime(d) {
-            if (!d) return "Desconhecido";
-            const diff = Math.floor((new Date() - d) / 1000);
-            if (diff < 60) return `${diff}s atrás`;
-
-            let parts = [];
-            const days = Math.floor(diff / 86400);
-            const h = Math.floor((diff % 86400) / 3600);
-            const m = Math.floor((diff % 3600) / 60);
-            const s = diff % 60;
-
-            if (days > 0) parts.push(`${days}d`);
-            if (h > 0) parts.push(`${h}h`);
-            if (m > 0) parts.push(`${m}m`);
-            if (days === 0 && h === 0) parts.push(`${s}s`);
-
-            if (parts.length > 2) return parts.slice(0, 2).join(' ') + '<br>' + parts.slice(2).join(' ') + ' atrás';
-            return parts.join(' ') + ' atrás';
-        }
-
-        function criarPopup(p, empresa) {
-            const d = parseDataManual(p.datalocal);
-            const timeStr = d ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--';
-            const dateStr = d ? d.toLocaleDateString() : '--/--';
-            const relative = formatRelativeTime(d);
-
-            return `
-        <div class="popup-header" style="border-top: 5px solid ${CORES[empresa]};">
-            ${p.cd_linha ? 'Linha ' + p.cd_linha : 'Sem Linha'}
+    const mobileHTML = `
+        <div style="padding:10px; background:#d0e4f7; border-radius:8px; margin-bottom:15px">
+            <h4 style="margin-bottom:10px; border-bottom:2px solid var(--primary); color:var(--primary)">Geral</h4>
+            ${simpleHTML}
         </div>
-        <div class="popup-body">
-            <div class="popup-row"><span>Prefixo</span><b>${p.prefixo}</b></div>
-            <div class="popup-row"><span>Empresa</span><b>${empresa}</b></div>
-            <div class="popup-row"><span>Sentido</span><b>${p.sentido == '0' ? 'Ida' : 'Volta'}</b></div>
-            <hr style="border:0; border-top:1px solid var(--border); margin:5px 0;">
-            <div class="popup-row"><span>Data</span><b>${dateStr}</b></div>
-            <div class="popup-row"><span>Hora</span><b>${timeStr}</b></div>
-            <div class="popup-row"><span>Sinal</span><b>${relative}</b></div>
+        <div style="padding:10px; background:#d0e4f7; border-radius:8px; margin-bottom:15px">
+             <h4 style="margin-bottom:10px; border-bottom:2px solid var(--primary); color:var(--primary)">Veículos Sem Linha</h4>
+             ${noLineHTML}
+        </div>
+        <div style="padding:10px; background:#d0e4f7; border-radius:8px;">
+             <h4 style="margin-bottom:10px; border-bottom:2px solid var(--primary); color:var(--primary)">Todas as Linhas</h4>
+             ${linesHTML}
         </div>
     `;
+    document.getElementById('mobile-content-target').innerHTML = mobileHTML;
+}
+
+function filtrarPorEmpresaRapido(empresa) {
+    filtroEmpresaPanel = empresa; 
+    linhaSelecionadaClick = null;
+    filtroSemLinhaEmpresa = null; 
+    limparTracado();
+    renderizarMapa();
+    if(document.getElementById('mobileSidebar').classList.contains('active')) toggleSidebar();
+}
+
+function filtrarSemLinhaPorEmpresaRapido(empresa) {
+    filtroSemLinhaEmpresa = empresa; 
+    filtroEmpresaPanel = null;
+    linhaSelecionadaClick = null;
+    limparTracado();
+    renderizarMapa();
+    if(document.getElementById('mobileSidebar').classList.contains('active')) toggleSidebar();
+}
+
+function filtrarPorLinhaRapido(linha) {
+    linhaSelecionadaClick = linha;
+    filtroEmpresaPanel = null;
+    filtroSemLinhaEmpresa = null;
+    const veiculo = todosDados.find(f => f.properties.cd_linha === linha);
+    if(veiculo) {
+        const emp = getEmpresa(veiculo.properties.prefixo);
+        desenharTracado(linha, emp, veiculo.properties.sentido);
+    }
+    renderizarMapa();
+    if(document.getElementById('mobileSidebar').classList.contains('active')) toggleSidebar();
+}
+
+function renderizarMapa() {
+    const chkEmpresas = Array.from(document.querySelectorAll('.chk-empresa:checked')).map(cb => cb.value);
+    const chkSemLinha = document.getElementById('chk-sem-linha').checked;
+
+    let usarCluster = true;
+    
+    if ((chkSemLinha || filtroSemLinhaEmpresa) && (chkEmpresas.length === 1 || filtroSemLinhaEmpresa)) usarCluster = false;
+    if (linhaSelecionadaClick) usarCluster = false;
+
+    const targetGroup = usarCluster ? clusterGroup : singleLayerGroup;
+    const oldGroup = usarCluster ? singleLayerGroup : clusterGroup;
+    if (map.hasLayer(oldGroup)) {
+        map.removeLayer(oldGroup);
+        map.addLayer(targetGroup);
+        oldGroup.clearLayers();
+        targetGroup.clearLayers();
+        for (let k in markersRegistry) delete markersRegistry[k];
+    }
+
+    const validIds = new Set();
+
+    todosDados.forEach(feature => {
+        const p = feature.properties;
+        if(!p.latitude || parseFloat(p.latitude) === 0) return;
+
+        if (linhaSelecionadaClick) {
+            if (String(p.cd_linha) !== String(linhaSelecionadaClick)) return;
+        } 
+        else if (filtroSemLinhaEmpresa) {
+            if (filtroSemLinhaEmpresa !== null && getEmpresa(p.prefixo) !== filtroSemLinhaEmpresa) return;
+            if (p.cd_linha && p.cd_linha.trim() !== "") return;
         }
-
-        // --- BUSCA AVANCADA ---
-        const searchInput = document.getElementById('search');
-        const suggestions = document.getElementById('suggestions');
-        let currentFocus = -1;
-
-        searchInput.addEventListener('input', e => {
-            const val = e.target.value.toLowerCase();
-            currentFocus = -1;
-            if (!val) { suggestions.style.display = 'none'; return; }
-            const set = new Set();
-            todosDados.forEach(f => { if (f.properties.cd_linha) set.add(f.properties.cd_linha); if (f.properties.prefixo) set.add(String(f.properties.prefixo)); });
-            const matches = Array.from(set).filter(x => x.toLowerCase().includes(val)).slice(0, 50);
-            if (matches.length === 0) { suggestions.style.display = 'none'; return; }
-            suggestions.innerHTML = matches.map(m => `<div class="suggestion-item" onclick="selectSuggestion('${m}')">${m}</div>`).join('');
-            suggestions.style.display = 'block';
-        });
-
-        searchInput.addEventListener('keydown', function (e) {
-            let items = suggestions.getElementsByClassName('suggestion-item');
-            if (e.key === 'ArrowDown') { currentFocus++; addActive(items); }
-            else if (e.key === 'ArrowUp') { currentFocus--; addActive(items); }
-            else if (e.key === 'Enter') {
-                e.preventDefault();
-                if (currentFocus > -1 && items[currentFocus]) items[currentFocus].click();
-                else if (items.length > 0) items[0].click();
+        else if (filtroEmpresaPanel) {
+            if (getEmpresa(p.prefixo) !== filtroEmpresaPanel) return;
+        }
+        else {
+            const empresa = getEmpresa(p.prefixo);
+            if(!chkEmpresas.includes(empresa)) return;
+            if (chkSemLinha && p.cd_linha && p.cd_linha.trim() !== "") return;
+            if(termosBusca.length > 0) {
+                const txt = (String(p.cd_linha)+" "+String(p.prefixo)).toLowerCase();
+                if(!termosBusca.some(t => txt.includes(t.toLowerCase()))) return;
             }
-            else if (e.key === 'Tab') {
-                if (suggestions.style.display === 'block') { e.preventDefault(); if (items.length > 0) items[0].click(); }
-            }
-        });
-
-        function addActive(x) {
-            if (!x) return false;
-            for (let i = 0; i < x.length; i++) x[i].classList.remove("selected");
-            if (currentFocus >= x.length) currentFocus = 0;
-            if (currentFocus < 0) currentFocus = (x.length - 1);
-            x[currentFocus].classList.add("selected");
-            x[currentFocus].scrollIntoView({ block: 'nearest' });
         }
 
-        function selectSuggestion(val) {
-            if (!termosBusca.includes(val)) {
-                termosBusca.push(val);
-                const div = document.createElement('div'); div.className = 'tag'; div.innerHTML = `${val} <span>✕</span>`;
-                div.onclick = () => { termosBusca = termosBusca.filter(x => x !== val); div.remove(); renderizarMapa(); };
-                document.getElementById('search-tags').appendChild(div);
-            }
-            suggestions.style.display = 'none';
-            renderizarMapa();
-        }
+        const id = String(p.prefixo);
+        validIds.add(id);
 
-        // --- ESTATISTICAS ---
-        function atualizarEstatisticas() {
-            const stats = { total: 0, porEmpresa: {}, semLinha: 0, semLinhaPorEmpresa: {} };
-            Object.keys(CORES).forEach(k => { stats.porEmpresa[k] = 0; stats.semLinhaPorEmpresa[k] = 0; });
-            todosDados.forEach(f => {
-                const p = f.properties;
-                const emp = getEmpresa(p.prefixo);
-                stats.total++;
-                if (stats.porEmpresa[emp] !== undefined) stats.porEmpresa[emp]++;
-                if (!p.cd_linha || p.cd_linha.trim() === "") {
-                    stats.semLinha++;
-                    if (stats.semLinhaPorEmpresa[emp] !== undefined) stats.semLinhaPorEmpresa[emp]++;
-                }
-            });
-            const mkRow = (lbl, v, c, t, val) => {
-                const act = (activeFilter.type === t && activeFilter.value === val) ? 'active-filter' : '';
-                return `<div class="stat-row ${act}" onclick="toggleFiltroStats('${t}', '${val}')"><span class="stat-badge" style="background:${c}">${lbl}</span><span class="stat-val">${v}</span></div>`;
-            };
-            let h = `<div class="stat-row" onclick="limparFiltros()" style="background:rgba(128,128,128,0.05); margin-bottom:10px;"><span style="font-weight:700">TOTAL (Limpar)</span><span class="stat-val">${stats.total}</span></div>`;
-            for (const [e, v] of Object.entries(stats.porEmpresa)) if (e !== 'DESCONHECIDO' && v > 0) h += mkRow(e, v, CORES[e], 'empresa', e);
-            document.getElementById('stats-content').innerHTML = h;
-            let h2 = '';
-            for (const [e, v] of Object.entries(stats.semLinhaPorEmpresa)) if (e !== 'DESCONHECIDO' && v > 0) h2 += mkRow(e, v, CORES[e], 'sem_linha', e);
-            document.getElementById('stats-noline').innerHTML = h2;
-        }
+        const lat = parseFloat(p.latitude);
+        const lng = parseFloat(p.longitude);
+        const empresa = getEmpresa(p.prefixo);
+        const cor = CORES[empresa];
+        const htmlIcon = `<div class="line-label" style="background-color: ${cor};">${p.cd_linha || p.prefixo}</div>`;
+        const sentidoTxt = getSentidoTexto(p.sentido);
+        const tooltipText = p.prefixo ? `${p.prefixo} | ${empresa} | ${sentidoTxt}` : empresa;
 
-        function toggleFiltroStats(type, val) {
-            activeFilter = (activeFilter.type === type && activeFilter.value === val) ? { type: null, value: null } : { type, value: val };
-            limparBuscaERota(); renderizarMapa(); atualizarEstatisticas();
-            if (window.innerWidth < 768) toggleSidebar();
-        }
-        function limparFiltros() { activeFilter = { type: null, value: null }; limparBuscaERota(); renderizarMapa(); atualizarEstatisticas(); if (window.innerWidth < 768) toggleSidebar(); }
-        function limparBuscaERota() { linhaSelecionadaClick = null; termosBusca = []; document.getElementById('search-tags').innerHTML = ''; document.getElementById('search').value = ''; limparTracado(); }
-
-        // --- TRACADO ---
-        function selectingLinha(l, e, s) { if (!l) return; linhaSelecionadaClick = l; activeFilter = { type: null, value: null }; desenharTracado(l, e, s); renderizarMapa(); }
-        function desenharTracado(cd, emp, sApi) {
-            if (!dadosTracado || !cd) return;
-            limparTracado();
-            const cands = dadosTracado.filter(x => String(x.cd_linha) === String(cd));
-            if (!cands.length) return;
-            let sNome = (sApi === '0' || sApi === 0) ? 'IDA' : 'VOLTA';
-            let rota = cands.find(c => String(c.sentido_linha).toUpperCase() === sNome) || cands[0];
-            try {
-                const coords = JSON.parse(rota.tracado_linha);
-                const cor = CORES[emp] || '#000';
-                const bordaColor = appState.routeBorder;
-                const borda = L.polyline(coords, { color: bordaColor, weight: 6, opacity: 0.9 }).addTo(map);
-                const miolo = L.polyline(coords, { color: cor, weight: 3, opacity: 1 }).addTo(map);
-                linhasTracado.push(borda, miolo);
-                map.fitBounds(miolo.getBounds(), { padding: [50, 50] });
-            } catch (e) { }
-        }
-        function limparTracado() { linhasTracado.forEach(l => map.removeLayer(l)); linhasTracado = []; }
-
-        // --- GPS ---
-        function toggleLocation() {
-            const btn = document.getElementById('btn-location');
-            if (watchId) {
-                navigator.geolocation.clearWatch(watchId); watchId = null;
-                if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
-                btn.classList.remove('active');
-                btn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"></circle></svg>`;
+        if (markersRegistry[id]) {
+            const marker = markersRegistry[id];
+            marker.setLatLng([lat, lng]);
+            
+            const popupContent = criarPopup(p, empresa);
+            if (marker.getPopup() && marker.getPopup().isOpen()) {
+                marker.getPopup().setContent(popupContent);
             } else {
-                btn.classList.add('active');
-                btn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3" fill="white" stroke="none"></circle></svg>`;
-                map.locate({ setView: true, maxZoom: 15 });
-                watchId = navigator.geolocation.watchPosition(pos => {
-                    const { latitude: lat, longitude: lng, accuracy: acc } = pos.coords;
-                    if (!userMarker) {
-                        userMarker = L.marker([lat, lng], { icon: L.divIcon({ className: 'user-location-marker', iconSize: [16, 16] }) }).addTo(map);
-                        userMarker.bindPopup(`<div style="text-align:center; padding:5px;"><b>Você está aqui</b><br><span style="font-size:11px; color:#666">Precisão: ${Math.round(acc)}m</span></div>`, { minWidth: 120, closeButton: false }).openPopup();
-                    } else { userMarker.setLatLng([lat, lng]); }
-                }, null, { enableHighAccuracy: true });
+                marker.setPopupContent(popupContent);
             }
+
+            if (!targetGroup.hasLayer(marker)) targetGroup.addLayer(marker);
+
+        } else {
+            const icon = L.divIcon({ className: '', html: htmlIcon, iconSize: [40, 20], iconAnchor: [20, 10], popupAnchor: [0, -10] });
+            const marker = L.marker([lat, lng], { icon: icon });
+            
+            marker.bindPopup(criarPopup(p, empresa));
+            
+            marker.bindTooltip(tooltipText, {
+                direction: 'top', offset: [0, -15], className: 'hover-tooltip'
+            });
+
+            marker.on('click', (e) => {
+                 L.DomEvent.stopPropagation(e); 
+                 linhaSelecionadaClick = p.cd_linha; 
+                 desenharTracado(p.cd_linha, empresa, p.sentido);
+                 renderizarMapa(); 
+            });
+
+            targetGroup.addLayer(marker);
+            markersRegistry[id] = marker;
         }
+    });
 
-        function getEmpresa(p) { const s = String(p || ''); if (s.startsWith('1')) return 'PIRACICABANA'; if (s.startsWith('2')) return 'PIONEIRA'; if (s.startsWith('3')) return 'URBI'; if (s.startsWith('4')) return 'MARECHAL'; if (s.startsWith('5') || s.startsWith('7')) return 'BSBUS'; return 'DESCONHECIDO'; }
-        function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); document.querySelector('.sidebar-overlay').classList.toggle('open'); }
-        function toggleSettings() { document.getElementById('settings-modal').classList.toggle('open'); document.getElementById('settings-overlay').classList.toggle('open'); }
-        function toggleFiltersPopup() { document.getElementById('filter-popup').classList.toggle('show'); }
-        document.querySelectorAll('.chk-empresa, #chk-sem-linha, #chk-todos').forEach(el => { el.addEventListener('change', e => { if (e.target.id === 'chk-todos') document.querySelectorAll('.chk-empresa').forEach(c => c.checked = e.target.checked); renderizarMapa(); }); });
-        map.on('click', () => { if (linhaSelecionadaClick) { linhaSelecionadaClick = null; limparTracado(); renderizarMapa(); } document.getElementById('filter-popup').classList.remove('show'); });
+    for (let id in markersRegistry) {
+        if (!validIds.has(id)) {
+            targetGroup.removeLayer(markersRegistry[id]);
+            delete markersRegistry[id];
+        }
+    }
+}
 
-        initApp();
-    </script>
+function toggleLivePanel() {
+    document.getElementById('live-content').classList.toggle('open');
+    document.getElementById('live-chevron').classList.toggle('rotate');
+}
+function toggleSidebar() {
+    document.getElementById('mobileSidebar').classList.toggle('active');
+    document.querySelector('.mobile-overlay').classList.toggle('active');
+}
+
+map.on('click', (e) => {
+    if (linhaSelecionadaClick) {
+        linhaSelecionadaClick = null;
+        limparTracado();
+        renderizarMapa();
+    }
+});
+
+function getEmpresa(p) {
+    const s = String(p||'');
+    if(s.startsWith('1')) return 'PIRACICABANA';
+    if(s.startsWith('2')) return 'PIONEIRA';
+    if(s.startsWith('3')) return 'URBI';
+    if(s.startsWith('4')) return 'MARECHAL';
+    if(s.startsWith('5')||s.startsWith('7')) return 'BSBUS';
+    return 'DESCONHECIDO';
+}
+function getSentidoTexto(s) { if(s=='0'||s===0) return 'IDA'; if(s=='1'||s===1) return 'VOLTA'; return '—'; }
+
+function parseDataManual(dataStr) {
+    if (!dataStr) return null;
+    const p = dataStr.split(' '); if(p.length < 2) return null;
+    const d = p[0].split('-'); const h = p[1].split(':');
+    return new Date(parseInt(d[0]), parseInt(d[1])-1, parseInt(d[2]), parseInt(h[0]), parseInt(h[1]), parseInt(h[2]));
+}
+
+// === FORMATAÇÃO DE TEMPO CORRIGIDA ===
+function calcularTempoRelativo(d) {
+    if (!d) return "Desconhecido";
+    const diffMs = new Date() - d;
+    const diffSec = Math.floor(diffMs / 1000);
+
+    if (diffSec < 60) return `${diffSec}s atrás`;
+    
+    if (diffSec < 3600) {
+        const m = Math.floor(diffSec / 60);
+        const s = diffSec % 60;
+        return `${m}m ${s}s atrás`;
+    }
+    
+    if (diffSec < 86400) {
+        const h = Math.floor(diffSec / 3600);
+        const m = Math.floor((diffSec % 3600) / 60);
+        const s = diffSec % 60;
+        // Quebra de linha se tiver horas
+        return `${h}h ${m}m<br>${s}s atrás`;
+    }
+    
+    // Mais de 24h
+    const days = Math.floor(diffSec / 86400);
+    const h = Math.floor((diffSec % 86400) / 3600);
+    const m = Math.floor((diffSec % 3600) / 60);
+    const s = diffSec % 60;
+    return `${days}d ${h}h<br>${m}m ${s}s atrás`;
+}
+
+function criarPopup(p, empresa) {
+    const d = parseDataManual(p.datalocal);
+    const dataFormatada = d ? d.toLocaleDateString('pt-BR') : '--/--/----';
+    const horaFormatada = d ? d.toLocaleTimeString('pt-BR') : '--:--:--';
+    const tempoRelativo = calcularTempoRelativo(d); // Usando a nova função
+
+    return `
+        <div class="custom-popup">
+            <div class="popup-header">Linha: ${p.cd_linha || 'N/A'}</div>
+            <hr>
+            <div class="popup-body">
+                <div class="popup-row"><span class="popup-label">Sentido:</span><span class="popup-value">${getSentidoTexto(p.sentido)}</span></div>
+                <div class="popup-row"><span class="popup-label">Prefixo:</span><span class="popup-value">${p.prefixo}</span></div>
+                <div class="popup-row"><span class="popup-label">Empresa:</span><span class="popup-value">${empresa}</span></div>
+                <div class="popup-row"><span class="popup-label">Data:</span><span class="popup-value">${dataFormatada}</span></div>
+                <div class="popup-row"><span class="popup-label">Horário:</span><span class="popup-value">${horaFormatada}</span></div>
+                <div class="popup-row"><span class="popup-label">Último sinal:</span><span class="popup-value">${tempoRelativo}</span></div>
+            </div>
+        </div>
+    `;
+}
+
+/* === BUSCA COM TECLADO === */
+const input = document.getElementById('search');
+const sugestoes = document.getElementById('suggestions');
+let currentFocus = -1;
+
+input.addEventListener('input', e => {
+    const val = e.target.value.trim().toLowerCase();
+    if(!val) { sugestoes.style.display='none'; return; }
+    const set = new Set();
+    todosDados.forEach(f => { if(f.properties.cd_linha) set.add(f.properties.cd_linha); if(f.properties.prefixo) set.add(String(f.properties.prefixo)); });
+    const matches = Array.from(set).filter(x => x.toLowerCase().includes(val)).sort();
+    
+    sugestoes.innerHTML = matches.map(m => `<div class="suggestion-item">${m}</div>`).join('');
+    sugestoes.style.display = matches.length ? 'block' : 'none';
+    currentFocus = -1;
+});
+
+input.addEventListener('keydown', function(e) {
+    let items = sugestoes.getElementsByClassName('suggestion-item');
+    if (e.key === 'ArrowDown') { 
+        currentFocus++; addActive(items); if(items[currentFocus]) items[currentFocus].scrollIntoView({block: 'nearest'}); 
+    }
+    else if (e.key === 'ArrowUp') { 
+        currentFocus--; addActive(items); if(items[currentFocus]) items[currentFocus].scrollIntoView({block: 'nearest'}); 
+    }
+    else if (e.key === 'Enter') { 
+        e.preventDefault(); 
+        if (currentFocus > -1 && items[currentFocus]) items[currentFocus].click();
+        else if (items.length > 0) items[0].click(); 
+    }
+    else if (e.key === 'Tab') {
+         if (sugestoes.style.display === 'block') {
+             e.preventDefault();
+             if (currentFocus > -1 && items[currentFocus]) items[currentFocus].click();
+             else if (items.length > 0) items[0].click();
+         }
+    }
+});
+
+function addActive(x) { if (!x) return false; for (let i=0; i<x.length; i++) x[i].classList.remove("selected"); if (currentFocus >= x.length) currentFocus=0; if (currentFocus < 0) currentFocus=(x.length-1); x[currentFocus].classList.add("selected"); }
+
+sugestoes.addEventListener('click', e => {
+    if(e.target.classList.contains('suggestion-item')) {
+        const v = e.target.innerText;
+        if(!termosBusca.includes(v)) {
+            termosBusca.push(v);
+            const areaTags = document.getElementById('search-tags');
+            const el = document.createElement('div'); el.className = 'tag';
+            el.innerHTML = `${v} <span>✕</span>`;
+            el.onclick = () => { termosBusca = termosBusca.filter(x => x !== v); el.remove(); renderizarMapa(); linhaSelecionadaClick = null; limparTracado(); };
+            areaTags.appendChild(el);
+            renderizarMapa();
+            linhaSelecionadaClick = null; limparTracado(); 
+        }
+        input.value=''; sugestoes.style.display='none'; input.focus();
+    }
+});
+
+async function atualizarDados() {
+    try {
+        const url = `${BASE_API_URL}&_t=${new Date().getTime()}`;
+        const req = await fetch(url);
+        const json = await req.json();
+        if(json.features) {
+            todosDados = json.features;
+            
+            // LÓGICA DE ATUALIZAÇÃO DO RESUMO OPERACIONAL (A CADA 1 MIN)
+            const now = Date.now();
+            if (now - lastStatsUpdate > 1000) {
+                calcularEstatisticas();
+                lastStatsUpdate = now;
+            }
+            // Mapa sempre atualiza (a cada 1s)
+            renderizarMapa(); 
+        }
+    } catch(e) {}
+}
+atualizarDados();
+setInterval(atualizarDados, 1000);
+
+document.querySelectorAll('.chk-empresa, #chk-sem-linha, #chk-todos').forEach(el => {
+    el.addEventListener('change', (e) => {
+        if(e.target.id === 'chk-todos') document.querySelectorAll('.chk-empresa').forEach(c => c.checked = e.target.checked);
+        renderizarMapa();
+    });
+});
+
+</script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js')
+        .then(reg => console.log('Service Worker registrado!', reg))
+        .catch(err => console.log('Falha ao registrar:', err));
+    });
+  }
+</script>
 </body>
-
 </html>
