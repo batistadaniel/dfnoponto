@@ -825,7 +825,6 @@
         async function atualizarDados() {
             try {
                 const req = await fetch(`${BASE_API_URL}&_t=${Date.now()}`);
-                const req = await fetch(url);
                 const json = await req.json();
                 if (json.features) { todosDados = json.features; renderizarMapa(); atualizarEstatisticas(); }
             } catch (e) { }
