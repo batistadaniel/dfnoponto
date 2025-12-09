@@ -259,13 +259,18 @@
         .sidebar-header {
             padding: 20px;
             background: var(--primary);
-            color: #fff;
+            /* A cor do texto será definida pelas classes dark-text ou light-text */
             font-weight: 800;
             font-size: 18px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            transition: color 0.2s;
         }
+        
+        /* Classes auxiliares para contraste */
+        .sidebar-header.dark-text { color: #000 !important; }
+        .sidebar-header.light-text { color: #fff !important; }
 
         .sidebar-content {
             padding: 15px;
@@ -485,7 +490,7 @@
             border-radius: 6px;
             text-align: center;
             white-space: nowrap;
-            box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.3);
+            /* box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.3); */
         }
 
         .bus-label-style-b {
@@ -762,7 +767,7 @@
             if (appState.customColor) {
                 document.documentElement.style.setProperty('--primary', appState.customColor);
                 document.getElementById('custom-color-picker').value = appState.customColor;
-                updateCloseButtonContrast(appState.customColor);
+                updateInterfaceContrast(appState.customColor);
             }
             setTheme(appState.theme, false);
             setIconStyle(appState.iconStyle, false);
@@ -786,17 +791,27 @@
             document.documentElement.style.setProperty('--primary', color);
             appState.customColor = color;
             localStorage.setItem('customColor', color);
-            updateCloseButtonContrast(color);
+            updateInterfaceContrast(color);
         }
 
-        function updateCloseButtonContrast(hexColor) {
+        function updateInterfaceContrast(hexColor) {
             const r = parseInt(hexColor.substr(1, 2), 16);
             const g = parseInt(hexColor.substr(3, 2), 16);
             const b = parseInt(hexColor.substr(5, 2), 16);
             const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+            const isDark = yiq < 128; // Se fundo for escuro, texto claro
+
+            // Botão Fechar Configs
             const btn = document.getElementById('btn-close-settings');
             btn.classList.remove('dark-text', 'light-text');
-            btn.classList.add(yiq >= 128 ? 'dark-text' : 'light-text');
+            btn.classList.add(isDark ? 'light-text' : 'dark-text');
+
+            // Header Sidebar
+            const sidebarHeader = document.querySelector('.sidebar-header');
+            if (sidebarHeader) {
+                sidebarHeader.classList.remove('dark-text', 'light-text');
+                sidebarHeader.classList.add(isDark ? 'light-text' : 'dark-text');
+            }
         }
 
         function setIconStyle(style, save = true) {
@@ -829,7 +844,7 @@
                 if (json.features) { todosDados = json.features; renderizarMapa(); atualizarEstatisticas(); }
             } catch (e) { }
         }
-        setInterval(atualizarDados, 1500);
+        setInterval(atualizarDados, 1000);
         atualizarDados();
 
         // --- RENDER MAPA ---
@@ -1001,6 +1016,10 @@
             }
             suggestions.style.display = 'none';
             renderizarMapa();
+
+            // MANTÉM O TECLADO ABERTO NO MOBILE
+            const input = document.getElementById('search');
+            input.focus();
         }
 
         // --- ESTATISTICAS ---
